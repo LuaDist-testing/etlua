@@ -106,6 +106,24 @@ This is my message to <%= [=[oh yeah  %>"]=] %>]]
           there is nothing left
         ]]
 
+    it "should use existing buffer", ->
+      fn = compile "hello<%= 'yeah' %>"
+      buff = {"first"}
+      out = fn {}, buff
+      assert.same "firsthelloyeah", out
+
+    it "should compile readme example", ->
+      parser = Parser!
+
+      first_fn = parser\load parser\compile_to_lua "Hello "
+      second_fn = parser\load parser\compile_to_lua "World"
+
+      buffer = {}
+      parser\run first_fn, nil, buffer
+      parser\run second_fn, nil, buffer
+
+      assert.same "Hello World", table.concat buffer
+
   describe "Parser.in_string", ->
     cases = {
       { "hello world", false }

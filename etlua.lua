@@ -1,10 +1,15 @@
-local VERSION = "1.0.1"
+local VERSION = "1.0.2"
 local insert, concat
 do
   local _obj_0 = table
   insert, concat = _obj_0.insert, _obj_0.concat
 end
-local setfenv = setfenv or function(fn, env)
+local load, setfenv, assert, type, error, tostring, tonumber, setmetatable
+do
+  local _obj_0 = _G
+  load, setfenv, assert, type, error, tostring, tonumber, setmetatable = _obj_0.load, _obj_0.setfenv, _obj_0.assert, _obj_0.type, _obj_0.error, _obj_0.tostring, _obj_0.tonumber, _obj_0.setmetatable
+end
+setfenv = setfenv or function(fn, env)
   local name
   local i = 1
   while true do
@@ -164,7 +169,20 @@ do
       if not (success) then
         return nil, err
       end
-      return self:load(self:chunks_to_lua())
+      local fn
+      fn, err = self:load(self:chunks_to_lua())
+      if not (fn) then
+        return nil, err
+      end
+      return function(...)
+        local buffer
+        buffer, err = self:run(fn, ...)
+        if buffer then
+          return concat(buffer)
+        else
+          return nil, err
+        end
+      end
     end,
     parse = function(self, str)
       self.str = str
@@ -225,26 +243,37 @@ do
         end
         return nil, err
       end
-      return function(env)
-        if env == nil then
-          env = { }
-        end
-        local combined_env = setmetatable({ }, {
-          __index = function(self, name)
-            local val = env[name]
-            if val == nil then
-              val = _G[name]
-            end
-            return val
-          end
-        })
-        setfenv(fn, combined_env)
-        return fn(tostring, concat, html_escape)
+      return fn
+    end,
+    run = function(self, fn, env, buffer)
+      if env == nil then
+        env = { }
       end
+      if buffer == nil then
+        buffer = { }
+      end
+      local combined_env = setmetatable({ }, {
+        __index = function(self, name)
+          local val = env[name]
+          if val == nil then
+            val = _G[name]
+          end
+          return val
+        end
+      })
+      setfenv(fn, combined_env)
+      return fn(buffer, #buffer, tostring, concat, html_escape)
+    end,
+    compile_to_lua = function(self, str)
+      local success, err = self:parse(str)
+      if not (success) then
+        return nil, err
+      end
+      return self:chunks_to_lua()
     end,
     chunks_to_lua = function(self)
       local buffer = {
-        "local _b, _b_i, _tostring, _concat, _escape = {}, 0, ..."
+        "local _b, _b_i, _tostring, _concat, _escape = ..."
       }
       local buffer_i = #buffer
       local push
@@ -277,7 +306,7 @@ do
           error("unknown type " .. tostring(t))
         end
       end
-      push("return _concat(_b)")
+      push("return _b")
       return concat(buffer, "\n")
     end
   }
@@ -305,10 +334,10 @@ local compile = (function()
   end
 end)()
 local render
-render = function(str, env)
+render = function(str, ...)
   local fn, err = compile(str)
   if fn then
-    return fn(env)
+    return fn(...)
   else
     return nil, err
   end

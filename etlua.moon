@@ -1,6 +1,7 @@
 VERSION = "1.0.2"
 
 import insert, concat from table
+import load, setfenv, assert, type, error, tostring, tonumber, setmetatable from _G
 
 setfenv = setfenv or (fn, env) ->
   local name
@@ -131,7 +132,14 @@ class Parser
   compile: (str) =>
     success, err = @parse str
     return nil, err unless success
-    @load @chunks_to_lua!
+    fn, err = @load @chunks_to_lua!
+    return nil, err unless fn
+    (...) ->
+      buffer, err = @run fn, ...
+      if buffer
+        concat buffer
+      else
+        nil, err
 
   parse: (@str) =>
     assert type(@str) == "string", "expecting string for parse"
@@ -162,6 +170,7 @@ class Parser
     source_line = get_line @str, source_line_no
     "#{err_msg} [#{source_line_no}]: #{source_line}"
 
+  -- converts lua string into template function
   load: (code, name="etlua") =>
     code_fn = do
       code_ref = code
@@ -178,20 +187,28 @@ class Parser
 
       return nil, err
 
-    (env={}) ->
-      combined_env = setmetatable {}, __index: (name) =>
-        val = env[name]
-        val = _G[name] if val == nil
-        val
+    fn
 
-      setfenv fn, combined_env
-      fn tostring, concat, html_escape
+  -- takes a function from @load and executes it with correct parameters
+  run: (fn, env={}, buffer={}) =>
+    combined_env = setmetatable {}, __index: (name) =>
+      val = env[name]
+      val = _G[name] if val == nil
+      val
+
+    setfenv fn, combined_env
+    fn buffer, #buffer, tostring, concat, html_escape
+
+  compile_to_lua: (str) =>
+    success, err = @parse str
+    return nil, err unless success
+    @chunks_to_lua!
 
   -- generates the code of the template
   chunks_to_lua: =>
-    -- todo: find a no-conflict name for buffer
+    -- todo: find a no-conflict name for locals
     buffer = {
-      "local _b, _b_i, _tostring, _concat, _escape = {}, 0, ..."
+      "local _b, _b_i, _tostring, _concat, _escape = ..."
     }
     buffer_i = #buffer
 
@@ -221,15 +238,15 @@ class Parser
         else
           error "unknown type #{t}"
 
-    push "return _concat(_b)"
+    push "return _b"
     concat buffer, "\n"
 
 compile = Parser!\compile
 
-render = (str, env) ->
+render = (str, ...) ->
   fn, err = compile(str)
   if fn
-    fn env
+    fn ...
   else
     nil, err
 
