@@ -39,6 +39,36 @@ pos_to_line = (str, pos) ->
     line += 1
   line
 
+class Compiler
+  new: =>
+    @buffer = {}
+    @i = 0
+
+  render: =>
+    table.concat @buffer
+
+  push: (str, ...) =>
+    i = @i + 1
+    @buffer[i] = str
+    @i = i
+    @push ...  if ...
+
+  header: =>
+    @push "local _tostring, _escape, _b, _b_i = ...\n"
+
+  footer: =>
+    @push "return _b"
+
+  increment: =>
+    @push "_b_i = _b_i + 1\n"
+
+  mark: (pos) =>
+    @push "--[[", tostring(pos), "]] "
+
+  assign: (...) =>
+    @push "_b[_b_i] = ", ...
+    @push "\n" if ...
+
 class Parser
   open_tag: "<%"
   close_tag: "%>"
@@ -190,56 +220,55 @@ class Parser
     fn
 
   -- takes a function from @load and executes it with correct parameters
-  run: (fn, env={}, buffer={}) =>
+  run: (fn, env={}, buffer, i, ...) =>
     combined_env = setmetatable {}, __index: (name) =>
       val = env[name]
       val = _G[name] if val == nil
       val
 
-    setfenv fn, combined_env
-    fn buffer, #buffer, tostring, concat, html_escape
+    unless buffer
+      buffer = {}
+      i = 0
 
-  compile_to_lua: (str) =>
+    setfenv fn, combined_env
+    fn tostring, html_escape, buffer, i, ...
+
+  compile_to_lua: (str, ...) =>
     success, err = @parse str
     return nil, err unless success
-    @chunks_to_lua!
+    @chunks_to_lua ...
 
   -- generates the code of the template
-  chunks_to_lua: =>
-    -- todo: find a no-conflict name for locals
-    buffer = {
-      "local _b, _b_i, _tostring, _concat, _escape = ..."
-    }
-    buffer_i = #buffer
-
-    push = (str) ->
-      buffer_i += 1
-      buffer[buffer_i] = str
+  chunks_to_lua: (compiler_cls=Compiler) =>
+    r = compiler_cls!
+    r\header!
 
     for chunk in *@chunks
       t = type chunk
       t = chunk[1] if t == "table"
       switch t
         when "string"
-          push "_b_i = _b_i + 1"
-          push "_b[_b_i] = #{("%q")\format(chunk)}"
+          r\increment!
+          r\assign ("%q")\format(chunk)
         when "code"
-          push "--[[#{chunk[3]}]] " .. chunk[2]
+          r\mark chunk[3]
+          r\push chunk[2], "\n"
         when "=", "-"
-          assign = "_tostring(#{chunk[2]})"
+          r\increment!
+          r\mark chunk[3]
+          r\assign!
 
           if t == "=" and @html_escape
-            assign = "_escape(" .. assign .. ")"
-
-          assign = "_b[_b_i] = " .. assign
-
-          push "_b_i = _b_i + 1"
-          push "--[[#{chunk[3]}]] " .. assign
+            r\push "_escape(_tostring(", chunk[2], "))\n"
+          else
+            r\push "_tostring(", chunk[2], ")\n"
         else
           error "unknown type #{t}"
 
-    push "return _b"
-    concat buffer, "\n"
+    r\footer!
+    r\render!
+
+
 
 compile = Parser!\compile
 
@@ -250,5 +279,5 @@ render = (str, ...) ->
   else
     nil, err
 
-{ :compile, :render, :Parser, _version: VERSION }
+{ :compile, :render, :Parser, :Compiler, _version: VERSION }
 
