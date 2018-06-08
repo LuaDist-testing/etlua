@@ -1,4 +1,4 @@
-VERSION = "1.0.2"
+VERSION = "1.3.0"
 
 import insert, concat from table
 import load, setfenv, assert, type, error, tostring, tonumber, setmetatable from _G
@@ -98,6 +98,8 @@ class Parser
 
     while @in_string @pos, close_start
       close_start, close_stop = @str\find @close_tag, close_stop, true
+      unless close_start
+        return nil, @error_for_pos start, "failed to find string close"
 
     trim_newline = if "-" == @str\sub close_start - 1, close_start - 1
       close_start -= 1
