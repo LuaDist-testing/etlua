@@ -1,10 +1,18 @@
-package = "etlua"
-version = "1.0.1-1"
+-- This file was automatically generated for the LuaDist project.
 
+package = "etlua"
+version = "1.0.2-1"
+
+-- LuaDist source
 source = {
-  url = "git://github.com/leafo/etlua.git",
-  branch = "v1.0.1"
+  tag = "1.0.2-1",
+  url = "git://github.com/LuaDist-testing/etlua.git"
 }
+-- Original source
+-- source = {
+--   url = "git://github.com/leafo/etlua.git",
+--   branch = "v1.0.2"
+-- }
 
 description = {
   summary = "Embedded templates for Lua",
@@ -27,4 +35,3 @@ build = {
     ["etlua"] = "etlua.lua",
   },
 }
-
